@@ -1,0 +1,93 @@
+#include <iostream>
+#include <Windows.h>
+
+#define PURPLE_R 136
+#define PURPLE_G 109
+#define PURPLE_B 102
+#define TOLERANCE 10 // Adjust tolerance as needed
+#define RECT_SIZE 7 // Size of the square to analyze
+
+bool isToggled = false;
+
+int main()
+{
+    while (true)
+    {
+        if (GetAsyncKeyState(VK_F1) & 0x8000)
+        {
+            isToggled = !isToggled; // Toggle the state
+            Sleep(200); // Debounce delay
+        }
+
+        if (!isToggled)
+        {
+            std::cout << "Detection is off." << std::endl;
+            Sleep(10);
+            continue;
+        }
+
+        // Get the size of the primary monitor
+        int screenWidth = GetSystemMetrics(SM_CXSCREEN);
+        int screenHeight = GetSystemMetrics(SM_CYSCREEN);
+
+        // Calculate the start point for the 30x30 pixels area in the middle of the screen
+        int startX = (screenWidth / 2) - (RECT_SIZE / 2);
+        int startY = (screenHeight / 2) - (RECT_SIZE / 2);
+
+        // Get the handle to the desktop window and its device context
+        HWND hDesktopWnd = GetDesktopWindow();
+        HDC hDesktopDC = GetDC(hDesktopWnd);
+        HDC hCaptureDC = CreateCompatibleDC(hDesktopDC);
+
+        // Create a bitmap and select it into the compatible device context
+        HBITMAP hCaptureBitmap = CreateCompatibleBitmap(hDesktopDC, RECT_SIZE, RECT_SIZE);
+        SelectObject(hCaptureDC, hCaptureBitmap);
+
+        // Copy the specified pixels from the screen to the bitmap
+        BitBlt(hCaptureDC, 0, 0, RECT_SIZE, RECT_SIZE, hDesktopDC, startX, startY, SRCCOPY);
+
+        bool purpleDetected = false;
+
+        for (int x = 0; x < RECT_SIZE; ++x)
+        {
+            for (int y = 0; y < RECT_SIZE; ++y)
+            {
+                // Get the color of the current pixel
+                COLORREF pixelColor = GetPixel(hCaptureDC, x, y);
+                int red = GetRValue(pixelColor);
+                int green = GetGValue(pixelColor);
+                int blue = GetBValue(pixelColor);
+
+                // Check if the color is within the tolerance range of the specified purple
+                if (abs(red - PURPLE_R) <= TOLERANCE &&
+                    abs(green - PURPLE_G) <= TOLERANCE &&
+                    abs(blue - PURPLE_B) <= TOLERANCE)
+                {
+                    purpleDetected = true;
+                    break;
+                }
+            }
+            if (purpleDetected) break;
+        }
+
+        std::cout << (purpleDetected ? "Purple detected." : "No purple detected.") << std::endl;
+
+        if (purpleDetected)
+        {
+            // Simulate pressing and releasing the 'K' key
+            keybd_event('K', 0, 0, 0); // Press 'K'
+            keybd_event('K', 0, KEYEVENTF_KEYUP, 0); // Release 'K'
+            Sleep(450); // Wait before checking again to prevent multiple detections
+        }
+
+        // Clean up resources
+        DeleteObject(hCaptureBitmap);
+        DeleteDC(hCaptureDC);
+        ReleaseDC(hDesktopWnd, hDesktopDC);
+
+        // Add a small delay to avoid consuming too much CPU
+        Sleep(7);
+    }
+
+    return 0;
+}
